@@ -1,4 +1,4 @@
-import { json, type LoaderFunction } from "@remix-run/node";
+import { json, Response, type LoaderFunction } from "@remix-run/node";
 import {
   Form,
   Link,
@@ -7,62 +7,14 @@ import {
   useSubmit,
   useTransition,
 } from "@remix-run/react";
-import config from "~/config.server";
-import "regenerator-runtime/runtime.js";
-import { multicombinations } from "@combinatorics/n-multicombinations";
 
-type Vendor = {
-  name: string;
-};
-
-type Image = {
-  thumbnail: string;
-  medium: string;
-  large: string;
-};
-
-type JEItem = {
-  id: string;
-  images: Image[];
-  foodType: string;
-  price: number;
-  name: string;
-  description: string;
-};
-
-type Menu = {
-  item: {
-    vendor: Vendor;
-    individualChoice: {
-      budget: number;
-      menuContent: {
-        heroImage: Image;
-        sections: {
-          title: string;
-          items: JEItem[];
-        }[];
-      };
-    };
-  };
-};
-
-type Item = {
-  id: string;
-  section: string;
-  images: Image[];
-  foodType: string;
-  price: number;
-  name: string;
-  description: string;
-};
-
-type Combo = {
-  key: string;
-  items: Item[];
-  price: number;
-  averagePrice: number;
-  uniqueLength: number;
-};
+import {
+  type Combo,
+  getCombos,
+  type Item,
+  type Vendor,
+  getMenuSummary,
+} from "~/data/menu.server";
 
 type LoaderData = {
   vendor: Vendor;
@@ -70,52 +22,19 @@ type LoaderData = {
 };
 
 export const loader: LoaderFunction = async ({ params, request }) => {
+  if (!params.menuId) {
+    throw new Response(`Menu not found`, {
+      status: 404,
+    });
+  }
+
   const url = new URL(request.url);
   const mustInclude = url.searchParams.getAll("mustInclude");
   const singleItem = !!url.searchParams.get("singleItem");
   const sort = url.searchParams.get("sort") ?? "weighted";
+  const menu = await getMenuSummary(params.menuId);
 
-  const data: Menu = await (
-    await fetch(
-      `https://app.business.just-eat.co.uk/api/individual-choice/${params.menuId}/summary`,
-      {
-        headers: new Headers(config.jefbHeaders),
-      }
-    )
-  ).json();
-
-  const budget = data.item.individualChoice.budget;
-  const allItems: Item[] =
-    data.item.individualChoice.menuContent.sections.flatMap((section) =>
-      section.items.map((item) => ({
-        id: item.id,
-        section: section.title,
-        images: item.images,
-        price: item.price,
-        name: item.name,
-        description: item.description,
-        foodType: item.foodType,
-      }))
-    );
-
-  const combos: Combo[] = [];
-  for (const comboItems of multicombinations([...allItems, null], 5)) {
-    const combo = {
-      items: comboItems.filter((item): item is Item => !!item),
-      price: comboItems.reduce((acc, item) => acc + (item?.price ?? 0), 0),
-    };
-
-    if (combo.price < budget) {
-      combos.push({
-        ...combo,
-        key: combo.items.map((item) => item.name).join(","),
-        uniqueLength: new Set(combo.items.map((item) => item.id)).size,
-        averagePrice: combo.price / combo.items.length,
-      });
-    }
-  }
-
-  let filteredCombos = [...combos];
+  let filteredCombos = [...(await getCombos(menu, 5))];
 
   if (singleItem) {
     filteredCombos = filteredCombos.filter((combo) => combo.uniqueLength == 1);
@@ -132,13 +51,15 @@ export const loader: LoaderFunction = async ({ params, request }) => {
     filteredCombos.sort(
       (c1, c2) => c2.price + c2.averagePrice - (c1.price + c1.averagePrice)
     );
-  } else if (sort == "max"){
+  } else if (sort == "max") {
     filteredCombos.sort((c1, c2) => c2.price - c1.price);
-  } else if (sort == "rouge") {
-    filteredCombos.sort((c1, c2) => (c2.price + c2.uniqueLength) - (c1.price + c1.uniqueLength));
+  } else if (sort == "rogue") {
+    filteredCombos.sort(
+      (c1, c2) => c2.price + c2.uniqueLength - (c1.price + c1.uniqueLength)
+    );
   }
   return json<LoaderData>({
-    vendor: data.item.vendor,
+    vendor: menu.item.vendor,
     combos: filteredCombos,
   });
 };
@@ -158,8 +79,17 @@ const uniqueBy = <T, K extends keyof T>(vals: T[], k: K): T[] => {
 
 const ItemDetails: React.FC<{ item: Item }> = ({ item }) => {
   return (
-    <div style={{ width: 250, height: 100, display: "flex", alignItems: "center" }}>
-      <img src={item.images[0].thumbnail} style={{ width: 100, padding: 8 }} />
+    <div
+      style={{ width: 250, height: 100, display: "flex", alignItems: "center" }}
+    >
+      {item.images.length > 0 ? (
+        <img
+          src={item.images[0].thumbnail}
+          style={{ width: 100, padding: 8 }}
+        />
+      ) : (
+        <div style={{ width: 100, padding: 8 }} />
+      )}
       <div>{item.name}</div>
     </div>
   );
@@ -237,13 +167,13 @@ export default function Index() {
                 value="max"
                 defaultChecked={sort === "max"}
               />
-              <label htmlFor="rougeSort">Rouge</label>
+              <label htmlFor="rogueSort">rogue</label>
               <input
                 type="radio"
-                id="rougeSort"
+                id="rogueSort"
                 name="sort"
-                value="rouge"
-                defaultChecked={sort === "rouge"}
+                value="rogue"
+                defaultChecked={sort === "rogue"}
               />
             </div>
           </Form>

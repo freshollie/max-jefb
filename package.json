@@ -12,8 +12,10 @@
     "@remix-run/react": "^1.7.2",
     "@remix-run/serve": "^1.7.2",
     "date-fns": "^2.29.3",
+    "fetch-cookie": "^2.1.0",
     "isbot": "^3.5.4",
     "js-combinatorics": "^2.1.1",
+    "p-memoize": "^7.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "regenerator-runtime": "^0.13.9"

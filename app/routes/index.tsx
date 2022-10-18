@@ -1,34 +1,10 @@
-import { json, LoaderFunction } from "@remix-run/node";
+import { json, type LoaderFunction } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { startOfDay } from "date-fns";
-import config from "~/config.server";
-
-type Vendor = {
-  orderId: string;
-  vendorName: string;
-  vendorLocationName: string;
-  vendorImage: {
-    original: string;
-    thumbnail: string;
-    medium: string;
-    large: string;
-  }[];
-};
-
-type Day = {
-  requestedDeliveryDate: string;
-  eaterOptions: Vendor[];
-};
+import { type EatingDay, getCart } from "~/data/menu.server";
 
 export const loader: LoaderFunction = async () => {
-  const cart: { items: Day[] } = await (
-    await fetch(
-      `https://app.business.just-eat.co.uk/api/eaters/me/carts?from=${startOfDay(
-        new Date()
-      ).toISOString()}`,
-      { headers: new Headers(config.jefbHeaders) }
-    )
-  ).json();
+  const cart = await getCart(startOfDay(new Date()).toISOString());
 
   return json(
     cart.items.filter(
@@ -39,7 +15,7 @@ export const loader: LoaderFunction = async () => {
 };
 
 const Index: React.FC = () => {
-  const days = useLoaderData<Day[]>();
+  const days = useLoaderData<EatingDay[]>();
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.4" }}>
       <div>

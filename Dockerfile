@@ -29,7 +29,7 @@ RUN rm -rf .yarn/cache
 # Build the app
 FROM base as build
 
-ARG NODE_ENV="development"
+ARG NODE_ENV="production"
 ENV NODE_ENV=$NODE_ENV
 
 WORKDIR /jefb
